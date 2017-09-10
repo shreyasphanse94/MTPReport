@@ -31,7 +31,7 @@ BCOR5mm, % Binding correction
 \usepackage{amsmath}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
-
+\usepackage{cite}
 
 \renewcommand{\algorithmicforall}{\textbf{for each}}
 
@@ -43,11 +43,11 @@ BCOR5mm, % Binding correction
 %	TITLE AND AUTHOR(S)
 %----------------------------------------------------------------------------------------
 
-\title{\normalfont\spacedallcaps{Initial Report on Dynamic Subgraph Isomorphism}} % The article title
+\title{\normalfont\spacedallcaps{Initial Report on Dynamic Subgraph Isomorphism on GPU}} % The article title
 
 %\subtitle{Subtitle} % Uncomment to display a subtitle
 
-\author{\spacedlowsmallcaps{Shreyas Phanse}} % The article author(s) - author affiliations need to be specified in the AUTHOR AFFILIATIONS block
+\author{\spacedlowsmallcaps{Shreyas Phanse (CS16M045)}}% The article author(s) - author affiliations need to be specified in the AUTHOR AFFILIATIONS block
 
 \date{} % An optional date to appear under the author(s)
 
@@ -84,7 +84,7 @@ BCOR5mm, % Binding correction
 
 \section*{Abstract} % This section will not appear in the table of contents due to the star (\section*)
 
-In real world problems which are modeled as graphs, subgraph isomorphism is an important problem. Since this problem is an NP-hard problem, it is not an easy task to find solutions for large graphs in a small amount of time. however, Recent works have been able to solve the problem in reasonable amount of time on specific real world datasets. Because of numerous applications of the problem in many data mining and pattern matching fields, the problem is well studied and different methods have been proposed in past years. Some of the state of art techniques for the same have been studied and discussed in upcoming sections.
+In real world problems which are modeled as graphs, subgraph isomorphism is an important problem. Since this problem is NP-hard, it is not an easy task to find solutions for large graphs in a small amount of time. however, Recent works have been able to solve the problem in reasonable amount of time on specific real world datasets. Because of numerous applications of the problem in many data mining and pattern matching fields, the problem is well studied and different methods have been proposed in past years. Some of the state-of-the-art techniques for the same have been studied and discussed in upcoming sections. In recent years, with the development of parallel programming and GPUs\cite{book}, massive speedup can be achieved on execution of various computing tasks. Our objective is to exploit this to obtain even faster query outputs for large graphs.
 
 %----------------------------------------------------------------------------------------
 %	AUTHOR AFFILIATIONS
@@ -103,9 +103,9 @@ In real world problems which are modeled as graphs, subgraph isomorphism is an i
 
 \section{Introduction}
 
-Subraph isomorphism is used in many real world problems such as such as chemical compounds, social networks, and biological structures. Many real applications in bioinformatics, chemistry, and software engineering require efficient and effective management of graph structured data.
+Subraph isomorphism is used in many real world problems such as chemical compounds, social networks, and biological structures. Many real applications in bioinformatics, chemistry, and software engineering require efficient and effective management of graph structured data.
 
-One of most important graph queries in graph databases is the subgraph isomorphism query. That is, given a query q and a data graph g, find all embeddings of q in g. This problem belongs to NP-hard. Various popular algorithms that have tried to solve the problem in reasonable amount of time are discussed in upcoming sections.
+One of most important graph queries in graph databases is the subgraph isomorphism query. That is, given a query q and a data graph g, find all embeddings of q in g. This problem is NP-hard. Various popular algorithms that have tried to solve the problem in reasonable amount of time are discussed in upcoming sections.
 
 \subsection{Problem Definition}
 A graph $q$ is defined as $(V, E,L)$ where $V$ is the set of vertices, $E(\subseteq V \times V)$ is the set of edges, and $L$ is a label function that maps a vertex to a set of labels. Without loss of generality, all subgraph isomorphism algorithms can be easily extended to handle graphs whose edges have labels.
@@ -115,31 +115,64 @@ Now, the subgraph isomorphism problem is defined as follows: “Given a query gr
 
 \begin{figure}[h]
 \centering 
-\includegraphics[width=\columnwidth]{problem1} 
+\includegraphics[width=\columnwidth]{problem_drawing} 
 \caption[Subgraph Isomorphism]{A query graph $q$ and a data graph $g$} % The text in the square bracket is the caption for the list of figures while the text in the curly brackets is the figure caption
 \label{fig:gallery} 
 \end{figure}
 
 For the above query graph, the data subgraph {$v_{1006}, v_{2008}, v_{2009}$} is isomorphic to the query graph and hence is a match. There is no other match for the given query graph in the data graph.\\
 
-\textbf{Dynamic version:} In the dynamic version of subgraph isomorphism, the objective is to find distinct embeddings of query graph in the data graph where data graphs and query graphs modify structurally (i.e. edges get andded/deleted from the graphs).
+\textbf{Dynamic version:} In the dynamic version of subgraph isomorphism, the objective is to find distinct embeddings of query graph in the data graph where data graphs and query graphs modify structurally (i.e. edges get added/deleted from the graphs).\\
+For example, for the above graph, we can remove an edge from the query graph as shown in the diagram below. The new matchings include all the previous matchings plus some other matchings. Our objective is to find the new matchings using the already found ones efficiently.
 
-\subsection{Data represtation}
-Graphs are represented as Compressed sparse rows. The compressed sparse row (CSR) or compressed row storage (CRS) format represents a matrix M by three (one-dimensional) arrays, that respectively contain nonzero values, the extents of rows, and column indices. Hence given adjacency matrix of a graph, CSR representaion can be obtained. This structure consumes very less space for large sparse graphs.\\
-\\
-Following section will give a brief overview on the few of the state of art algorithms for subgraph isomorphism.
+\subsection{Data Representation}
+Graphs are represented as Compressed sparse rows\cite{csr}. The compressed sparse row (CSR) or compressed row storage (CRS) format represents a matrix M by three (one-dimensional) arrays, that respectively contain nonzero values, the extents of rows, and column indices. Hence given adjacency matrix of a graph, CSR representation can be obtained. This structure consumes very less space for large sparse graphs as compared to its adjacenct matrix. The following example shows an adjacency matrix (M) for graph in figure 2(a) and its CSR representation.\\
+
+\[
+    M =
+    \begin{bmatrix}
+        0 & 1 & 1 & 1 & 0 & 0 & 0 & 0 & 0\\
+        1 & 0 & 0 & 0 & 1 & 1 & 1 & 0 & 0\\
+        1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+        1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+        0 & 1 & 0 & 0 & 0 & 1 & 0 & 0 & 0\\
+        0 & 1 & 0 & 0 & 1 & 0 & 0 & 1 & 0\\
+        0 & 1 & 0 & 0 & 0 & 0 & 0 & 0 & 1\\
+        0 & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0\\
+        0 & 0 & 0 & 0 & 0 & 1 & 1 & 0 & 0\\
+    \end{bmatrix}
+\]
+\[
+    IA = 
+    \begin{bmatrix}
+        0 & 3 & 7 & 8 & 9 & 11 & 14 & 16 & 17 & 18
+    \end{bmatrix}
+\] 
+\[
+    JA =
+    \begin{bmatrix}
+        1 & 2 & 3 & 0 & 4 & 5 & 6 & 0 & 0 & \dots
+    \end{bmatrix}
+\]
+Here, IA is an array of size rows(M) + 1 which is recursively defined as:
+\begin{itemize}
+    \item $IA[0] = 0$
+    \item $IA[i]$ = $IA[i - 1]$ + number of non zero entries in $i - 1^{th}$ row of M
+\end{itemize}
+JA contains the column index of all the non zero entries in M in row major order.
 %----------------------------------------------------------------------------------------
 %	ALGOS
 %----------------------------------------------------------------------------------------
-
 \section{Algorithms}
+
+Following section will give a brief overview on the few of the state-of-art algorithms\cite{comparision} for subgraph isomorphism.
 
 \subsection{Generic Algorithm}
 
 The generic subgraph isomorphism algorithm is implemented
 as a backtracking algorithm which finds solutions
 by incrementing partial solutions or abandoning them when
-it determines they cannot be completed. Most of the popular algorithms are variations of the generic algorithm. It must be noted that the efficiency of algorithms depend on the heuristics used for pruning the candidate list and selecting the order of vertices that are to be matched.
+it determines they cannot be completed. Most of the popular algorithms are variations of the generic algorithm. It must be noted that the efficiency of algorithms depends on the heuristics used for pruning the candidate list and selecting the order of vertices that are to be matched.
 
 \begin{algorithm}
 \caption{\textsc{GenericAlgo}}\label{euclid}
@@ -170,20 +203,23 @@ it determines they cannot be completed. Most of the popular algorithms are varia
 \end{algorithmic}
 \end{algorithm}
 
-Algorithm 1 shows a generic subgraph isomorphism algorithm, \textsc{GenericAlgo}. Its inputs are a query graph q and a data graph g, and its output is a set of subgraph isomorphisms (or embeddings) of q in g. Here, to represent an embedding, we use a list M of pairs of a query vertex and a corresponding data vertex.
+Algorithm 1 shows a generic subgraph isomorphism algorithm, \textsc{GenericAlgo}. Its inputs are a query graph q and a data graph g, and its output is a set of subgraph isomorphisms (or embeddings) of q in g. Here, to represent an embedding, we use a list M of pairs of a query vertex and a corresponding data vertex. The specific implementations of these procedures have been discussed in the respective subsections.
 
 %------------------------------------------------
 
-\subsection{Ullmann algorithm}
-\textsc{FilterCandidates:} \textsc{FilterCandidates} returns a set of data graph vertices with a matching label $u$.\\
+\subsection{Ullmann Algorithm\cite{ullmann}}
+
+Ullmann Algorithm exploits the template mentioned in Genric algorithm in the following way.\\
+\\
+\textsc{FilterCandidates:} \textsc{FilterCandidates} returns a set of data graph vertices with a matching label $u$. For example, in figure $1$, it will return candidates of $u_1$ as \{$v_1, v_{1006}$\}\\
 \\
 \textsc{NextQueryVertex:} returns one vertex at a time from the vertices in the order they appear in the input. It is clear that the performance of the Ullmann algorithm highly depends on the input order of the query vertices. This issue is discussed in the next subsection.\\
 \\
-\textsc{RefineCandidates:} prunes out all candidate vertices that have a smaller degree than u.\\
+\textsc{RefineCandidates:} prunes out all candidate vertices that have a smaller degree than u. In our running example, $v_{1005}$ will be pruned out as a candidate for $u_3$ because it has degree less than that of $u_3$ and hence can never map to it.\\
 \\
-\textsc{IsJoinable:} iterates through all adjacent query vertices of u. If there is an adjecent vertex already matched then it checks whether there is a corresponding edge in the data graph.
+\textsc{IsJoinable:} iterates through all adjacent query vertices of u. If there is an adjacent vertex already matched then it checks whether there is a corresponding edge in the data graph. In our running example, \{$u_1, u_2, u_3$\} will be matched to \{$v_1, v_2, v_3$\}. The \textsc{IsJoinable} procedure will check if there are corresponding edges between these matches. Since the edge between $v_2$ and $v_4$ is absent, the \textsc{IsJoinable} procedure will return false.
 
-\subsection{VF2 algorithm}
+\subsection{VF2 algorithm\cite{vf2}}
 
 \textsc{NextQueryVertex:} Unlike Ullmann, VF2 starts with the first vertex and selects a vertex connected from the already matched query vertices. Note that the original VF2 algorithm does not define any order in which query vertices are selected.\\
 \\
@@ -191,11 +227,11 @@ Algorithm 1 shows a generic subgraph isomorphism algorithm, \textsc{GenericAlgo}
 rules to prune out data vertex candidates:
 \begin{enumerate}
     \item Prune out any vertex v in C(u) such that v is not connected from already matched data vertices.
-    \item Let $M_q$ and $M_g$ be a set of matched query vertices and a set of matched data vertices, respectively. Let $C_q$ and $C_g$ be a set of adjacent and notyet- matched query vertices connected from $M_q$ and a set of adjacent and not-yet-matched data vertices connected from $M_g$, respectively. Let adj(u) be a set of adjacent vertices to a vertex u. Then, prune out any vertex v in C(u) such that $|C_q \cap adj(u)| > |C_g \cap adj(u)|$
-    \item prune out any vertex v in C(u) such that $|adj(u)\backslash C_q \backslash M_q| > |adj(v)\backslash C_g \backslash M_g|$ 
+    \item The number of unmatched vertices of neighbors of v in query graph must be greater than unmatched vertices of neighbors of u in data graph.
+    \item The count of neighbors of v which are not the neighbors of mapped nodes and are not mapped nodes in Q must be greater than neighbors of u who are not neighbors of mapped nodes and are not mapped nodes in D.
 \end{enumerate}
 
-\subsection{$\boldsymbol{Turbo_{ISO}}$ algorithm}
+\subsection{$\boldsymbol{Turbo_{ISO}}$ Algorithm\cite{turbo}}
 
 \begin{algorithm}
 \caption{\textsc{$Turbo_{ISO}(g,q)$}}\label{euclid}
@@ -208,7 +244,7 @@ rules to prune out data vertex candidates:
     \If{$\textsc{ExploreCR}(u'_s,{v_s},CR)=FAIL$}
         \State \textbf{continue}
     \EndIf
-    \State order = $\textsc{DeterminrMatchingOrder}(q',CR)$
+    \State order = $\textsc{DetermineMatchingOrder}(q',CR)$
     \State $\textsc{UpdateState}(M,F,{us},{vs})$
     \State $\textsc{SubGraphSearch}(g,q',q,order)$
     \State $\textsc{RestoreState}(M,F,{u_s},{v_s})$
@@ -218,7 +254,7 @@ rules to prune out data vertex candidates:
 
 \begin{figure}[H]
 \centering 
-\includegraphics[scale=0.20]{QueryNEC} 
+\includegraphics[scale=0.5]{Figures/123.png} 
 \caption[Query graph and NEC Tree]{A query graph and its corresponding NEC Tree} % The text in the square bracket is the caption for the list of figures while the text in the curly brackets is the figure caption
 \label{fig:gallery} 
 \end{figure}
@@ -247,6 +283,8 @@ The Dynamic version of the problem can be split into the following subproblems:
     \item Edge added to the data graph: This case is yet to be explored.
 \end{enumerate}
 
-
+\renewcommand{\refname}{\spacedlowsmallcaps{References}} % For modifying the bibliography heading
+\bibliographystyle{unsrt}
+\bibliography{Figures/reated.bib}
 
 \end{document}
